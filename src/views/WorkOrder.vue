@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>工单管理</h2>
       <div class="flex gap-8">
-        <el-tag type="danger" effect="dark" v-if="orderStats.urgent">紧急工单: {{ orderStats.urgent }}</el-tag>
+        <el-tag type="danger" effect="dark" v-if="filteredStats.urgent">紧急工单: {{ filteredStats.urgent }}</el-tag>
         <el-button type="primary" @click="openCreateDialog">
           <el-icon><Plus /></el-icon> 新建工单
         </el-button>
@@ -41,10 +41,10 @@
       </div>
 
       <el-steps :active="activeStepIndex" simple size="small" finish-status="success" align-center style="margin-bottom: 16px">
-        <el-step v-for="(v, k) in statusLabels" :key="k" :title="`${v}(${orderStats[k] || 0})`" />
+        <el-step v-for="(v, k) in statusLabels" :key="k" :title="`${v}(${filteredStats[k] || 0})`" />
       </el-steps>
 
-      <el-table :data="orderList" size="default" stripe @row-dblclick="openDetail">
+      <el-table :data="pagedOrderList" size="default" stripe @row-dblclick="openDetail">
         <el-table-column prop="id" label="工单编号" width="140" fixed="left" />
         <el-table-column prop="alarmId" label="关联告警" width="120">
           <template #default="{ row }">
@@ -104,6 +104,15 @@
           </template>
         </el-table-column>
       </el-table>
+      <div class="flex-center mt-20">
+        <el-pagination
+          v-model:current-page="page.page"
+          v-model:page-size="page.size"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="page.total"
+          layout="total, sizes, prev, pager, next, jumper"
+        />
+      </div>
     </div>
 
     <el-dialog v-model="detailVisible" title="工单详情" width="680px">
@@ -247,9 +256,15 @@ const filter = reactive({
   assignee: '',
   keyword: ''
 })
+const page = reactive({ page: 1, size: 20, total: 0 })
 const orderList = ref<WorkOrder[]>([])
 const staffList = ref<MaintenanceStaff[]>([])
 const orderStats = reactive<Record<string, number>>({})
+
+const pagedOrderList = computed(() => {
+  const start = (page.page - 1) * page.size
+  return orderList.value.slice(start, start + page.size)
+})
 
 const statCards: Record<string, any> = {
   pending: { label: '待派单', type: 'electric', icon: 'Clock', bg: 'rgba(230,162,60,0.1)', color: '#E6A23C' },
@@ -274,9 +289,23 @@ const statusTagMap: Record<WorkOrderStatus, any> = {
   pending: 'danger', assigned: 'warning', processing: 'primary',
   completed: 'success', verified: '', closed: 'info'
 }
+
+const filteredStats = computed(() => {
+  const list = orderList.value
+  const result: Record<string, number> = {
+    pending: 0, assigned: 0, processing: 0, completed: 0, verified: 0, closed: 0
+  }
+  list.forEach(o => {
+    if (result[o.status] !== undefined) result[o.status]++
+  })
+  result.total = list.length
+  result.urgent = list.filter(o => o.priority === 'urgent' && !['closed', 'verified'].includes(o.status)).length
+  return result
+})
+
 const activeStepIndex = computed(() => {
   const list: WorkOrderStatus[] = ['pending', 'assigned', 'processing', 'completed', 'verified', 'closed']
-  const counts = list.map(k => orderStats[k] || 0)
+  const counts = list.map(k => filteredStats.value[k] || 0)
   let total = counts.reduce((s, x) => s + x, 0)
   if (total === 0) return 0
   let acc = 0
@@ -312,13 +341,32 @@ function openCreateDialog() {
   Object.assign(createForm, { title: '', type: 'exceed', priority: 'medium', location: '', description: '' })
   createVisible.value = true
 }
+
+function matchesFilter(order: WorkOrder, filterObj: typeof filter): boolean {
+  if (filterObj.status && order.status !== filterObj.status) return false
+  if (filterObj.priority && order.priority !== filterObj.priority) return false
+  if (filterObj.assignee && order.assignee !== filterObj.assignee) return false
+  if (filterObj.keyword) {
+    const kw = filterObj.keyword.toLowerCase()
+    if (!order.title.toLowerCase().includes(kw) && !order.location.toLowerCase().includes(kw)) return false
+  }
+  return true
+}
+
 async function confirmCreate() {
   if (!createForm.title || !createForm.location) { ElMessage.warning('请填写完整信息'); return }
-  await workOrderService.createWorkOrder(createForm as any)
+  const newOrder = await workOrderService.createWorkOrder(createForm as any)
   createVisible.value = false
   ElMessage.success('工单创建成功')
-  await nextTick()
-  await loadOrders()
+  if (matchesFilter(newOrder, filter)) {
+    orderList.value.unshift(newOrder)
+    page.total = orderList.value.length
+    page.page = 1
+  } else {
+    ElMessage.info('新工单不匹配当前筛选条件，已在全量数据中创建')
+    await nextTick()
+    await loadOrders()
+  }
   await loadStats()
 }
 
@@ -397,8 +445,18 @@ async function loadOrders() {
   if (!f.priority) delete (f as any).priority
   if (!f.assignee) delete (f as any).assignee
   if (!f.keyword) delete (f as any).keyword
-  orderList.value = await workOrderService.getWorkOrders(f as any)
+  const list = await workOrderService.getWorkOrders(f as any)
+  orderList.value = list
+  page.total = list.length
 }
+
+watch(
+  () => [filter.status, filter.priority, filter.assignee, filter.keyword],
+  () => {
+    page.page = 1
+    loadOrders()
+  }
+)
 
 async function loadStats() {
   const st = await workOrderService.getStats()
@@ -421,6 +479,7 @@ onMounted(async () => {
 .mb-4 { margin-bottom: 4px; }
 .mb-12 { margin-bottom: 12px; }
 .mb-16 { margin-bottom: 16px; }
+.mt-20 { margin-top: 20px; }
 .p-12 { padding: 12px; }
 .bg-gray-50 { background: #fafafa; }
 .bg-blue-50 { background: rgba(64,158,255,0.08); }
@@ -431,4 +490,5 @@ onMounted(async () => {
 .gap-16 { gap: 16px; }
 .gap-8 { gap: 8px; }
 .items-center { align-items: center; }
+.flex-center { display: flex; justify-content: center; align-items: center; }
 </style>

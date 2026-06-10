@@ -46,7 +46,7 @@ export const mockEnergyOverview: EnergyData[] = [
   { type: 'light', value: 18950, unit: 'kWh', trend: -5.1, trendType: 'down' }
 ]
 
-export const mockZoneEnergy: ZoneEnergy[] = zoneNames.map((name, i) => {
+const _rawZones = zoneNames.map((name, i) => {
   const electric = random(10000, 30000, 0)
   const water = random(200, 800, 0)
   const ac = random(5000, 15000, 0)
@@ -62,7 +62,12 @@ export const mockZoneEnergy: ZoneEnergy[] = zoneNames.map((name, i) => {
     total,
     percent: 0
   }
-}).map(z => ({ ...z, percent: Number(((z.total / mockZoneEnergy.reduce((s, x) => s + x.total, 0)) * 100).toFixed(1)) }))
+})
+const _zoneSum = _rawZones.reduce((s, x) => s + x.total, 0)
+export const mockZoneEnergy: ZoneEnergy[] = _rawZones.map(z => ({
+  ...z,
+  percent: Number(((z.total / _zoneSum) * 100).toFixed(1))
+}))
 
 export const mockPeakValley: PeakValleyData[] = [
   { period: '尖峰 10:00-12:00', electric: 18500, rate: 1.35, type: 'peak' },

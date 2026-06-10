@@ -201,7 +201,10 @@ const zoneOption = computed(() => ({
     avoidLabelOverlap: true,
     itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
     label: { show: true, formatter: '{d}%', fontSize: 12 },
-    data: zoneData.value.map(z => ({ name: z.name, value: z.total }))
+    data: zoneData.value.map(z => ({
+      name: z.name,
+      value: Number.isFinite(z.total) && z.total > 0 ? z.total : 0
+    }))
   }]
 }))
 
@@ -218,7 +221,7 @@ const peakOption = computed(() => ({
   series: [{
     type: 'bar',
     data: peakValleyData.value.map(x => ({
-      value: x.electric,
+      value: Number.isFinite(x.electric) && x.electric > 0 ? x.electric : 0,
       itemStyle: {
         color: x.type === 'peak' ? '#F56C6C' : x.type === 'flat' ? '#E6A23C' : '#67C23A',
         borderRadius: [4, 4, 0, 0]
@@ -263,14 +266,23 @@ const trendOption = computed(() => ({
 const { chartRef: trendChartRef, updateOption: updateTrend } = useECharts(() => trendOption.value)
 
 async function loadAll() {
-  const [o1, o2, o3, o4, o5, o6] = await Promise.all([
+  const [o1, o2, o3, o4, o5] = await Promise.all([
     energyService.getOverview(),
     energyService.getZoneEnergy(),
     energyService.getPeakValley(),
     energyService.getCostEstimate(),
-    energyService.getAbnormalRank(),
-    loadTrend()
+    energyService.getAbnormalRank()
   ])
+  overviewData.value = o1
+  zoneData.value = o2
+  peakValleyData.value = o3
+  costData.value = o4
+  abnormalData.value = o5
+  await loadTrend()
+  await nextTick()
+  updateZone?.()
+  updatePeak?.()
+  updateTrend?.()
 }
 
 async function loadTrend() {

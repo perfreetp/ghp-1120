@@ -212,7 +212,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Alarm, AlarmType, AlarmStatus, WorkOrderPriority } from '@/types'
@@ -344,6 +344,14 @@ async function loadAlarms() {
   const start = (page.page - 1) * page.size
   alarmList.value = list.slice(start, start + page.size)
 }
+
+watch(
+  () => [filter.type, filter.status, filter.level, filter.keyword],
+  () => {
+    page.page = 1
+    loadAlarms()
+  }
+)
 
 onMounted(async () => {
   await loadStats()
