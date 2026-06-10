@@ -18,6 +18,143 @@ function delay<T>(data: T, ms = 300): Promise<T> {
   return new Promise(resolve => setTimeout(() => resolve(data), ms))
 }
 
+function seededRandom(seed: number): () => number {
+  let s = seed
+  return () => {
+    s = (s * 9301 + 49297) % 233280
+    return s / 233280
+  }
+}
+
+function genHours(): string[] {
+  return Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
+}
+
+function genSeededSeries(base: number, variance: number, rand: () => number): number[] {
+  return Array.from({ length: 24 }, () => {
+    const v = base * (0.6 + rand() * 0.8) + rand() * variance
+    return Number(v.toFixed(1))
+  })
+}
+
+function getFloorRoomNames(floor: number): string[] {
+  if (floor === -2) return ['高压配电室', '低压配电室', '中央空调机房', '水泵房', '电梯机房']
+  if (floor === -1) return ['停车场A区', '停车场B区', '停车场C区', '出入口通道', '管理值班室']
+  if (floor === 1) return ['大堂接待区', '大堂休息区', '商务中心', '便利店', '前台办公区']
+  return ['会议室A', '会议室B', '开放办公区1', '开放办公区2', '经理室']
+}
+
+function genRoomCurvesForFloor(floor: number): RoomCurve[] {
+  const rooms = getFloorRoomNames(floor)
+  const hours = genHours()
+  const isBasement = floor < 0
+  const isLobby = floor === 1
+  const floorFactor = 1 + Math.max(0, floor) * 0.05
+
+  return rooms.map((name, i) => {
+    const seed = (floor + 100) * 1000 + i * 137 + name.charCodeAt(0)
+    const rand = seededRandom(seed)
+
+    let electricBase = 50 + i * 10
+    let waterBase = 5 + i
+    let acBase = 30 + i * 5
+    let lightBase = 20 + i * 3
+
+    if (isBasement) {
+      electricBase = 80 + i * 20
+      waterBase = 3 + i * 0.5
+      acBase = floor === -2 ? 100 + i * 30 : 10 + i * 2
+      lightBase = floor === -2 ? 30 + i * 5 : 60 + i * 10
+    } else if (isLobby) {
+      electricBase = 60 + i * 15
+      waterBase = 4 + i * 0.8
+      acBase = 80 + i * 20
+      lightBase = 70 + i * 15
+    }
+
+    electricBase *= floorFactor
+    waterBase *= floorFactor
+    acBase *= floorFactor
+    lightBase *= floorFactor
+
+    return {
+      roomId: `R${floor < 0 ? 'B' + Math.abs(floor) : floor}${String(100 + i).padStart(3, '0')}`,
+      roomName: name,
+      floor,
+      time: hours,
+      electric: genSeededSeries(electricBase, 20, rand),
+      water: genSeededSeries(waterBase, 3, rand),
+      ac: genSeededSeries(acBase, 15, rand),
+      light: genSeededSeries(lightBase, 10, rand)
+    }
+  })
+}
+
+function genDeviceStatusForFloor(floor: number): DeviceStatus[] {
+  const result: DeviceStatus[] = []
+  const isBasement = floor < 0
+  const isLobby = floor === 1
+  const rand = seededRandom((floor + 100) * 7919)
+  const manufacturers = ['格力电器', '美的集团', '海尔智家', '西门子', '施耐德']
+
+  const floorLabel = floor < 0 ? `B${Math.abs(floor)}` : `${floor}F`
+  const runHoursBase = 500 + Math.max(0, floor) * 100
+  let deviceConfigs: Array<{ type: EnergyType; names: string[]; count: number; powerRange: [number, number]; mostlyOn?: boolean }>
+
+  if (floor === -2) {
+    deviceConfigs = [
+      { type: 'electric', names: ['高压柜', '变压器', '低压配电柜', 'UPS主机', '发电机'], count: 6, powerRange: [100, 400], mostlyOn: true },
+      { type: 'ac', names: ['冷水机组', '冷冻水泵', '冷却水泵', '冷却塔风机', '新风机组'], count: 5, powerRange: [50, 200], mostlyOn: true },
+      { type: 'water', names: ['生活水泵', '消防水泵', '中水系统', '排污泵'], count: 4, powerRange: [5, 30], mostlyOn: true },
+      { type: 'light', names: ['机房照明', '走廊照明', '应急照明'], count: 3, powerRange: [2, 15] }
+    ]
+  } else if (floor === -1) {
+    deviceConfigs = [
+      { type: 'light', names: ['车道照明', '车位照明A', '车位照明B', '出入口照明', '应急照明'], count: 8, powerRange: [2, 20], mostlyOn: true },
+      { type: 'electric', names: ['通风机', '道闸系统', '监控系统', '充电桩'], count: 5, powerRange: [3, 50] },
+      { type: 'ac', names: ['送排风机'], count: 2, powerRange: [10, 30] }
+    ]
+  } else if (floor === 1) {
+    deviceConfigs = [
+      { type: 'ac', names: ['风机盘管大堂A', '风机盘管大堂B', '新风机组', '回风处理机'], count: 5, powerRange: [20, 80], mostlyOn: true },
+      { type: 'light', names: ['大堂主照明', '大堂辅照明', '走廊照明', '门头景观灯', '应急照明'], count: 6, powerRange: [5, 40], mostlyOn: true },
+      { type: 'electric', names: ['旋转门', '电梯控制', '信息屏', '安防系统'], count: 4, powerRange: [2, 30], mostlyOn: true },
+      { type: 'water', names: ['卫生间供水', '绿化灌溉'], count: 2, powerRange: [1, 10] }
+    ]
+  } else {
+    deviceConfigs = [
+      { type: 'ac', names: ['风机盘管01', '风机盘管02', '风机盘管03', '新风机组'], count: 4, powerRange: [10, 50], mostlyOn: true },
+      { type: 'light', names: ['办公照明A组', '办公照明B组', '走廊照明', '会议室照明', '应急照明'], count: 5, powerRange: [3, 25], mostlyOn: true },
+      { type: 'electric', names: ['楼层配电箱', '插座回路', '网络机柜'], count: 3, powerRange: [10, 80], mostlyOn: true },
+      { type: 'water', names: ['卫生间供水'] , count: 1, powerRange: [1, 8] }
+    ]
+  }
+
+  let idCounter = 1
+  const typePrefix: Record<EnergyType, string> = { electric: 'EL', water: 'WT', ac: 'AC', light: 'LT' }
+
+  for (const cfg of deviceConfigs) {
+    for (let i = 0; i < cfg.count; i++) {
+      const nameTpl = cfg.names[i % cfg.names.length]
+      const num = Math.floor(i / cfg.names.length) + 1
+      const on = cfg.mostlyOn ? rand() < 0.95 : rand() < 0.9
+      result.push({
+        id: `${typePrefix[cfg.type]}${floorLabel}-${String(idCounter++).padStart(3, '0')}`,
+        name: `${floorLabel}-${nameTpl}${cfg.count > cfg.names.length ? String(num).padStart(2, '0') : ''}`,
+        type: cfg.type,
+        room: getFloorRoomNames(floor)[i % getFloorRoomNames(floor).length],
+        floor,
+        status: on ? 'on' : 'off',
+        power: Number((cfg.powerRange[0] + rand() * (cfg.powerRange[1] - cfg.powerRange[0])).toFixed(1)),
+        runHours: Math.round(runHoursBase + rand() * 3000),
+        lastUpdate: new Date(Date.now() - Math.round(rand() * 3600000)).toISOString(),
+        manufacturer: manufacturers[Math.floor(rand() * manufacturers.length)]
+      } as DeviceStatus & { manufacturer?: string })
+    }
+  }
+  return result
+}
+
 export const energyService = {
   getOverview(): Promise<EnergyData[]> {
     return delay(mockEnergyOverview)
@@ -47,13 +184,20 @@ export const energyService = {
   },
 
   getRoomCurves(floor?: number): Promise<RoomCurve[]> {
-    return delay(floor ? mockRoomCurves.filter(r => r.floor === floor) : mockRoomCurves)
+    if (floor !== undefined) {
+      return delay(genRoomCurvesForFloor(floor))
+    }
+    return delay(mockRoomCurves)
   },
 
   getDeviceStatus(filter?: { type?: EnergyType; floor?: number; status?: string }): Promise<DeviceStatus[]> {
-    let result = mockDeviceStatus
+    let result: DeviceStatus[]
+    if (filter?.floor !== undefined) {
+      result = genDeviceStatusForFloor(filter.floor)
+    } else {
+      result = mockDeviceStatus
+    }
     if (filter?.type) result = result.filter(d => d.type === filter.type)
-    if (filter?.floor !== undefined) result = result.filter(d => d.floor === filter.floor)
     if (filter?.status) result = result.filter(d => d.status === filter.status)
     return delay(result)
   },

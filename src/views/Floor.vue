@@ -134,7 +134,7 @@ import type { EnergyType, CompareData } from '@/types'
 import { energyService, archiveService } from '@/services'
 import { useECharts } from '@/composables/useECharts'
 
-const selectedFloor = ref(3)
+const selectedFloor = ref<number | undefined>(undefined)
 const compareType = ref('mom')
 const curveType = ref<EnergyType>('electric')
 const deviceFilter = ref<'all' | EnergyType>('all')
@@ -219,21 +219,33 @@ watch([roomCurveData, curveType, compareData, compareType], () => {
   updateCompare?.()
 }, { deep: true })
 
-watch(selectedFloor, () => {
-  energyService.getDeviceStatus({ floor: selectedFloor.value }).then(d => deviceList.value = d)
-})
-
-onMounted(async () => {
-  const [r, d, c, f] = await Promise.all([
-    energyService.getRoomCurves(selectedFloor.value),
-    energyService.getDeviceStatus({ floor: selectedFloor.value }),
-    energyService.getCompareData(),
-    archiveService.getFloors()
+watch(selectedFloor, async (newFloor) => {
+  if (newFloor === undefined) return
+  const [r, d] = await Promise.all([
+    energyService.getRoomCurves(newFloor),
+    energyService.getDeviceStatus({ floor: newFloor })
   ])
   roomCurveData.value = r
   deviceList.value = d
-  compareData.value = c
+  updateRoomCurve?.()
+})
+
+onMounted(async () => {
+  const [f, c] = await Promise.all([
+    archiveService.getFloors(),
+    energyService.getCompareData()
+  ])
   floorList.value = f
+  compareData.value = c
+  if (f.length > 0) {
+    selectedFloor.value = f[0].number
+    const [r, d] = await Promise.all([
+      energyService.getRoomCurves(selectedFloor.value),
+      energyService.getDeviceStatus({ floor: selectedFloor.value })
+    ])
+    roomCurveData.value = r
+    deviceList.value = d
+  }
 })
 </script>
 

@@ -310,7 +310,8 @@ async function confirmCreate() {
   await workOrderService.createWorkOrder(createForm as any)
   createVisible.value = false
   ElMessage.success('工单创建成功')
-  loadOrders()
+  await loadOrders()
+  await loadStats()
 }
 
 const assignVisible = ref(false)
@@ -332,14 +333,16 @@ async function confirmAssign() {
   await workOrderService.assignWorkOrder(currentOrder.value.id, assignForm.assignee, assignForm.assigneePhone)
   assignVisible.value = false
   ElMessage.success('派单成功')
-  loadOrders()
+  await loadOrders()
+  await loadStats()
 }
 
 async function startProcess(row: WorkOrder) {
   const note = (await ElMessageBox.prompt('请输入处理说明', '开始处理', { inputPlaceholder: '如：已前往现场排查' })).value
   await workOrderService.startWorkOrder(row.id, note)
   ElMessage.success('已开始处理')
-  loadOrders()
+  await loadOrders()
+  await loadStats()
 }
 
 const completeVisible = ref(false)
@@ -355,21 +358,24 @@ async function confirmComplete() {
   await workOrderService.completeWorkOrder(currentOrder.value.id, completeForm.result)
   completeVisible.value = false
   ElMessage.success('完工提交成功')
-  loadOrders()
+  await loadOrders()
+  await loadStats()
 }
 
 async function verifyOrder(row: WorkOrder) {
   await ElMessageBox.confirm(`确认验收该工单？验收后可关闭。`, '提示', { type: 'info' })
   await workOrderService.verifyWorkOrder(row.id)
   ElMessage.success('验收通过')
-  loadOrders()
+  await loadOrders()
+  await loadStats()
 }
 
 async function closeOrder(row: WorkOrder) {
   await ElMessageBox.confirm(`确认关闭工单"${row.title}"？`, '提示', { type: 'warning' })
   await workOrderService.closeWorkOrder(row.id)
   ElMessage.success('工单已关闭')
-  loadOrders()
+  await loadOrders()
+  await loadStats()
 }
 
 async function loadOrders() {
@@ -381,15 +387,19 @@ async function loadOrders() {
   orderList.value = await workOrderService.getWorkOrders(f as any)
 }
 
+async function loadStats() {
+  const st = await workOrderService.getStats()
+  Object.assign(orderStats, st)
+}
+
 onMounted(async () => {
-  const [o, s, st] = await Promise.all([
+  const [o, s] = await Promise.all([
     workOrderService.getWorkOrders(),
-    workOrderService.getStaffs(),
-    workOrderService.getStats()
+    workOrderService.getStaffs()
   ])
   orderList.value = o
   staffList.value = s
-  Object.assign(orderStats, st)
+  await loadStats()
 })
 </script>
 

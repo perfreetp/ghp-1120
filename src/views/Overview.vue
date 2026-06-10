@@ -141,17 +141,25 @@ import { ref, computed, onMounted, watch } from 'vue'
 import type { EnergyType } from '@/types'
 import { energyService } from '@/services'
 import { useECharts } from '@/composables/useECharts'
+import { mockEnergyOverview, mockZoneEnergy, mockPeakValley, mockCostEstimate, mockAbnormalRank } from '@/mock'
 
 const rangeType = ref('month')
 const dateRange = ref<[Date, Date]>()
 const trendType = ref<EnergyType>('electric')
 
-const overviewData = ref<Awaited<ReturnType<typeof energyService.getOverview>>>([])
-const zoneData = ref<Awaited<ReturnType<typeof energyService.getZoneEnergy>>>([])
-const peakValleyData = ref<Awaited<ReturnType<typeof energyService.getPeakValley>>>([])
-const costData = ref<Awaited<ReturnType<typeof energyService.getCostEstimate>>>([])
-const abnormalData = ref<Awaited<ReturnType<typeof energyService.getAbnormalRank>>>([])
-const trendHourly = ref<{ time: string[]; data: number[] }>({ time: [], data: [] })
+const overviewData = ref(mockEnergyOverview)
+const zoneData = ref(mockZoneEnergy)
+const peakValleyData = ref(mockPeakValley)
+const costData = ref(mockCostEstimate)
+const abnormalData = ref(mockAbnormalRank)
+
+function genDefaultTrend(type: EnergyType = 'electric') {
+  const hours = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
+  const base = type === 'electric' ? 4000 : type === 'water' ? 120 : type === 'ac' ? 2500 : 800
+  const data = hours.map(() => Math.round(base * (0.5 + Math.random() * 1.2)))
+  return { time: hours, data }
+}
+const trendHourly = ref<{ time: string[]; data: number[] }>(genDefaultTrend('electric'))
 
 const typeLabels: Record<EnergyType, string> = {
   electric: '用电', water: '用水', ac: '空调', light: '照明'

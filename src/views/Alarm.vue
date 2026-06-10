@@ -215,10 +215,12 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { Alarm, AlarmType, AlarmStatus } from '@/types'
-import { alarmService } from '@/services'
+import type { Alarm, AlarmType, AlarmStatus, WorkOrderPriority } from '@/types'
+import { alarmService, workOrderService } from '@/services'
+import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
+const store = useAppStore()
 
 const filter = reactive({ type: '' as AlarmType | '', status: '' as AlarmStatus | '', level: '' as Alarm['level'] | '', keyword: '' })
 const page = reactive({ page: 1, size: 20, total: 0 })
@@ -273,7 +275,8 @@ async function confirmHandle() {
   await alarmService.handleAlarm(currentAlarm.value.id, handleForm.note, handleForm.handler)
   ElMessage.success('已提交处理')
   handleVisible.value = false
-  loadAlarms()
+  await loadAlarms()
+  await store.loadAlarmStats()
 }
 
 const resolveVisible = ref(false)
@@ -289,18 +292,35 @@ async function confirmResolve() {
   await alarmService.resolveAlarm(currentAlarm.value.id, resolveForm.note)
   ElMessage.success('已标记解决')
   resolveVisible.value = false
-  loadAlarms()
+  await loadAlarms()
+  await store.loadAlarmStats()
 }
 
 async function closeAlarm(row: Alarm) {
   await ElMessageBox.confirm(`确认关闭此告警？关闭后将不再提醒。`, '提示', { type: 'warning' })
   await alarmService.closeAlarm(row.id)
   ElMessage.success('已关闭')
-  loadAlarms()
+  await loadAlarms()
+  await store.loadAlarmStats()
 }
 
-function createWorkOrder(row: Alarm) {
-  ElMessage.success(`已从告警 ${row.id} 创建工单，跳转到工单页面`)
+async function createWorkOrder(row: Alarm) {
+  const priorityMap: Record<Alarm['level'], WorkOrderPriority> = {
+    critical: 'urgent',
+    major: 'urgent',
+    minor: 'high',
+    warning: 'medium'
+  }
+  const newOrder = await workOrderService.createWorkOrder({
+    title: row.title,
+    type: row.type,
+    alarmId: row.id,
+    priority: priorityMap[row.level],
+    location: row.location,
+    description: `${row.description}\n（来自告警 ${row.id}，设备：${row.device || '无'}）`,
+    status: 'pending'
+  })
+  ElMessage.success(`已从告警 ${row.id} 创建工单 ${newOrder.id}，跳转到工单页面`)
   router.push('/workorder')
 }
 
