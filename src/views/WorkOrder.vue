@@ -46,6 +46,12 @@
 
       <el-table :data="orderList" size="default" stripe @row-dblclick="openDetail">
         <el-table-column prop="id" label="工单编号" width="140" fixed="left" />
+        <el-table-column prop="alarmId" label="关联告警" width="120">
+          <template #default="{ row }">
+            <el-tag v-if="row.alarmId" type="danger" effect="light" size="small">{{ row.alarmId }}</el-tag>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="type" label="类型" width="100">
           <template #default="{ row }">
             <el-tag :type="typeTagMap[row.type]" size="small" effect="light">{{ typeLabels[row.type] }}</el-tag>
@@ -128,9 +134,10 @@
             <div class="text-muted text-sm mb-4">创建时间</div>
             <div>{{ formatTime(currentOrder.createTime) }}</div>
           </div>
-          <div v-if="currentOrder.alarmId">
-            <div class="text-muted text-sm mb-4">关联告警</div>
-            <el-tag type="danger" effect="light">{{ currentOrder.alarmId }}</el-tag>
+          <div>
+            <div class="text-muted text-sm mb-4">关联告警编号</div>
+            <el-tag v-if="currentOrder.alarmId" type="danger" effect="light">{{ currentOrder.alarmId }}</el-tag>
+            <span v-else class="text-muted">-</span>
           </div>
           <div v-if="currentOrder.assignee">
             <div class="text-muted text-sm mb-4">处理人</div>
@@ -229,7 +236,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { WorkOrder, WorkOrderStatus, WorkOrderPriority, AlarmType, MaintenanceStaff } from '@/types'
 import { workOrderService } from '@/services'
@@ -310,6 +317,7 @@ async function confirmCreate() {
   await workOrderService.createWorkOrder(createForm as any)
   createVisible.value = false
   ElMessage.success('工单创建成功')
+  await nextTick()
   await loadOrders()
   await loadStats()
 }
@@ -333,6 +341,7 @@ async function confirmAssign() {
   await workOrderService.assignWorkOrder(currentOrder.value.id, assignForm.assignee, assignForm.assigneePhone)
   assignVisible.value = false
   ElMessage.success('派单成功')
+  await nextTick()
   await loadOrders()
   await loadStats()
 }
@@ -341,6 +350,7 @@ async function startProcess(row: WorkOrder) {
   const note = (await ElMessageBox.prompt('请输入处理说明', '开始处理', { inputPlaceholder: '如：已前往现场排查' })).value
   await workOrderService.startWorkOrder(row.id, note)
   ElMessage.success('已开始处理')
+  await nextTick()
   await loadOrders()
   await loadStats()
 }
@@ -358,6 +368,7 @@ async function confirmComplete() {
   await workOrderService.completeWorkOrder(currentOrder.value.id, completeForm.result)
   completeVisible.value = false
   ElMessage.success('完工提交成功')
+  await nextTick()
   await loadOrders()
   await loadStats()
 }
@@ -366,6 +377,7 @@ async function verifyOrder(row: WorkOrder) {
   await ElMessageBox.confirm(`确认验收该工单？验收后可关闭。`, '提示', { type: 'info' })
   await workOrderService.verifyWorkOrder(row.id)
   ElMessage.success('验收通过')
+  await nextTick()
   await loadOrders()
   await loadStats()
 }
@@ -374,6 +386,7 @@ async function closeOrder(row: WorkOrder) {
   await ElMessageBox.confirm(`确认关闭工单"${row.title}"？`, '提示', { type: 'warning' })
   await workOrderService.closeWorkOrder(row.id)
   ElMessage.success('工单已关闭')
+  await nextTick()
   await loadOrders()
   await loadStats()
 }
@@ -389,7 +402,8 @@ async function loadOrders() {
 
 async function loadStats() {
   const st = await workOrderService.getStats()
-  Object.assign(orderStats, st)
+  Object.keys(st).forEach(k => { orderStats[k] = (st as any)[k] })
+  Object.keys(orderStats).forEach(k => { if (!(k in st)) delete orderStats[k] })
 }
 
 onMounted(async () => {

@@ -137,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import type { EnergyType } from '@/types'
 import { energyService } from '@/services'
 import { useECharts } from '@/composables/useECharts'
@@ -160,6 +160,7 @@ function genDefaultTrend(type: EnergyType = 'electric') {
   return { time: hours, data }
 }
 const trendHourly = ref<{ time: string[]; data: number[] }>(genDefaultTrend('electric'))
+const lastWeekData = ref<number[]>(trendHourly.value.data.map(v => Math.round(v * (0.85 + Math.random() * 0.3))))
 
 const typeLabels: Record<EnergyType, string> = {
   electric: '用电', water: '用水', ac: '空调', light: '照明'
@@ -252,7 +253,7 @@ const trendOption = computed(() => ({
       name: '上周同期',
       type: 'line',
       smooth: true,
-      data: trendHourly.value.data.map(v => Math.round(v * (0.85 + Math.random() * 0.3))),
+      data: lastWeekData.value,
       itemStyle: { color: '#909399' },
       lineStyle: { type: 'dashed', width: 2 }
     }
@@ -275,11 +276,13 @@ async function loadAll() {
 async function loadTrend() {
   const o = await energyService.getHourlyTrend(trendType.value)
   trendHourly.value = o
+  lastWeekData.value = o.data.map(v => Math.round(v * (0.85 + Math.random() * 0.3)))
 }
 
 watch(trendType, () => { loadTrend() })
 
-watch([zoneData, peakValleyData, trendHourly], () => {
+watch([zoneData, peakValleyData, trendHourly], async () => {
+  await nextTick()
   updateZone?.()
   updatePeak?.()
   updateTrend?.()

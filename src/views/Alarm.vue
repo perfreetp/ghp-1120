@@ -254,6 +254,11 @@ function formatTime(s: string): string {
   return new Date(s).toLocaleString('zh-CN')
 }
 
+async function loadStats() {
+  const s = await alarmService.getStats()
+  Object.keys(s).forEach(k => { (stats as any)[k] = (s as any)[k] })
+}
+
 const detailVisible = ref(false)
 const currentAlarm = ref<Alarm | null>(null)
 function openDetail(row: Alarm) {
@@ -276,6 +281,7 @@ async function confirmHandle() {
   ElMessage.success('已提交处理')
   handleVisible.value = false
   await loadAlarms()
+  await loadStats()
   await store.loadAlarmStats()
 }
 
@@ -293,6 +299,7 @@ async function confirmResolve() {
   ElMessage.success('已标记解决')
   resolveVisible.value = false
   await loadAlarms()
+  await loadStats()
   await store.loadAlarmStats()
 }
 
@@ -301,6 +308,7 @@ async function closeAlarm(row: Alarm) {
   await alarmService.closeAlarm(row.id)
   ElMessage.success('已关闭')
   await loadAlarms()
+  await loadStats()
   await store.loadAlarmStats()
 }
 
@@ -338,7 +346,7 @@ async function loadAlarms() {
 }
 
 onMounted(async () => {
-  Object.assign(stats, await alarmService.getStats())
+  await loadStats()
   await loadAlarms()
 })
 </script>
