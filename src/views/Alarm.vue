@@ -338,11 +338,10 @@ async function loadAlarms() {
   if (!f.status) delete (f as any).status
   if (!f.level) delete (f as any).level
   if (!f.keyword) delete (f as any).keyword
-  const list = await alarmService.getAlarms(f as any)
-  const all = list.length
-  page.total = all
+  const all = await alarmService.getAlarms(f as any)
+  page.total = all.length
   const start = (page.page - 1) * page.size
-  alarmList.value = list.slice(start, start + page.size)
+  alarmList.value = all.slice(start, start + page.size)
 }
 
 watch(
@@ -351,6 +350,11 @@ watch(
     page.page = 1
     loadAlarms()
   }
+)
+
+watch(
+  () => [page.page, page.size],
+  () => loadAlarms()
 )
 
 onMounted(async () => {

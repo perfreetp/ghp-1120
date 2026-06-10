@@ -13,7 +13,7 @@
     <div class="stat-grid">
       <div v-for="(s, key) in statCards" :key="key" class="stat-card" :class="s.type">
         <div class="stat-label">{{ s.label }}</div>
-        <div class="stat-value">{{ orderStats[key as any] || 0 }}<span class="stat-unit">单</span></div>
+        <div class="stat-value">{{ filteredStats[key] || 0 }}<span class="stat-unit">单</span></div>
         <div class="stat-icon" :style="{ background: s.bg, color: s.color }">
           <el-icon :size="28"><component :is="s.icon" /></el-icon>
         </div>
@@ -367,7 +367,6 @@ async function confirmCreate() {
     await nextTick()
     await loadOrders()
   }
-  await loadStats()
 }
 
 const assignVisible = ref(false)
@@ -391,7 +390,6 @@ async function confirmAssign() {
   ElMessage.success('派单成功')
   await nextTick()
   await loadOrders()
-  await loadStats()
 }
 
 async function startProcess(row: WorkOrder) {
@@ -400,7 +398,6 @@ async function startProcess(row: WorkOrder) {
   ElMessage.success('已开始处理')
   await nextTick()
   await loadOrders()
-  await loadStats()
 }
 
 const completeVisible = ref(false)
@@ -418,7 +415,6 @@ async function confirmComplete() {
   ElMessage.success('完工提交成功')
   await nextTick()
   await loadOrders()
-  await loadStats()
 }
 
 async function verifyOrder(row: WorkOrder) {
@@ -427,7 +423,6 @@ async function verifyOrder(row: WorkOrder) {
   ElMessage.success('验收通过')
   await nextTick()
   await loadOrders()
-  await loadStats()
 }
 
 async function closeOrder(row: WorkOrder) {
@@ -436,7 +431,6 @@ async function closeOrder(row: WorkOrder) {
   ElMessage.success('工单已关闭')
   await nextTick()
   await loadOrders()
-  await loadStats()
 }
 
 async function loadOrders() {
@@ -470,6 +464,7 @@ onMounted(async () => {
     workOrderService.getStaffs()
   ])
   orderList.value = o
+  page.total = o.length
   staffList.value = s
   await loadStats()
 })
